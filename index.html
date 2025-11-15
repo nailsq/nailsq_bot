@@ -3112,6 +3112,25 @@
         const user = tg.initDataUnsafe?.user;
         console.log('Telegram User:', user);
         
+        // ========== БЕЗОПАСНОСТЬ И ДОСТУП К АДМИН-ПАНЕЛИ ==========
+        // Проверка авторизации для доступа к режиму мастера (админ-панели)
+        function isAuthorizedAdmin() {
+            if (!user || !user.id) {
+                return false;
+            }
+            // Только пользователь с Telegram ID 1346221717 имеет доступ
+            return String(user.id) === '1346221717';
+        }
+        
+        // Проверка доступа перед выполнением административных функций
+        function checkAdminAccess() {
+            if (!isAuthorizedAdmin()) {
+                showNotification('❌ Доступ запрещен. У вас нет прав для выполнения этого действия.', 'error');
+                return false;
+            }
+            return true;
+        }
+        
         // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
         let cart = [];
         let selectedService = null;
@@ -3119,7 +3138,13 @@
         let selectedTime = null;
         let clientWishes = '';
         let referencePhotos = []; // Массив для нескольких фотографий
+        // Инициализация режима мастера с проверкой авторизации
         let isMaster = localStorage.getItem('isMaster') === 'true';
+        // Если режим мастера включен, но пользователь не авторизован - выключаем его
+        if (isMaster && !isAuthorizedAdmin()) {
+            isMaster = false;
+            localStorage.setItem('isMaster', 'false');
+        }
         let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
 
         // Система учета заработка
@@ -4241,6 +4266,21 @@
 
         // Переключение режима мастера/клиента
         function toggleMasterMode() {
+            // Проверка авторизации перед переключением режима
+            if (!isAuthorizedAdmin()) {
+                showNotification('❌ Доступ запрещен. У вас нет прав для доступа к админ-панели.', 'error');
+                // Убеждаемся, что режим мастера выключен для неавторизованных пользователей
+                isMaster = false;
+                localStorage.setItem('isMaster', 'false');
+                const toggleBtn = document.getElementById('modeToggle');
+                if (toggleBtn) {
+                    toggleBtn.textContent = '👑 Режим мастера';
+                    toggleBtn.style.background = '#0078D4';
+                }
+                updateUIForUserRole();
+                return;
+            }
+            
             isMaster = !isMaster;
             localStorage.setItem('isMaster', isMaster);
             
@@ -4267,13 +4307,23 @@
             const loyaltyTab = document.getElementById('loyaltyTab');
             const userRole = document.getElementById('userRole');
             
-            if (isMaster) {
+            // Проверяем авторизацию перед показом админ-панели
+            const hasAdminAccess = isAuthorizedAdmin();
+            
+            // Если пользователь не авторизован, принудительно выключаем режим мастера
+            if (!hasAdminAccess && isMaster) {
+                isMaster = false;
+                localStorage.setItem('isMaster', 'false');
+            }
+            
+            if (isMaster && hasAdminAccess) {
                 if (adminTab) adminTab.style.display = 'block';
                 // Скрываем вкладки лояльности и избранного у мастера
                 if (favoritesTab) favoritesTab.style.display = 'none';
                 if (loyaltyTab) loyaltyTab.style.display = 'none';
                 if (userRole) userRole.textContent = '👑 Мастер';
             } else {
+                // Скрываем админ-панель для всех, кроме авторизованных пользователей
                 if (adminTab) adminTab.style.display = 'none';
                 // Показываем вкладки лояльности и избранного у клиента
                 if (favoritesTab) favoritesTab.style.display = 'block';
@@ -5167,6 +5217,7 @@
         }
 
         function openPhotoManager() {
+            if (!checkAdminAccess()) return;
             const modal = document.getElementById('photoManagerModal');
             modal.classList.add('active');
             renderWorksGallery();
@@ -5695,6 +5746,7 @@
 
         // ========== НАСТРОЙКИ СООБЩЕНИЙ ОБ ОДОБРЕНИИ ==========
         function openApprovalSettings() {
+            if (!checkAdminAccess()) return;
             const modal = document.getElementById('approvalSettingsModal');
             modal.classList.add('active');
             
@@ -5732,6 +5784,7 @@
         let freeTimeSlots = JSON.parse(localStorage.getItem('freeTimeSlots')) || [];
 
         function openFreeTimeManager() {
+            if (!checkAdminAccess()) return;
             const modal = document.getElementById('freeTimeModal');
             modal.classList.add('active');
             renderFreeTimeSlots();
@@ -5837,6 +5890,7 @@
         }
 
         function viewFreeTimeSlots() {
+            if (!checkAdminAccess()) return;
             openFreeTimeManager();
         }
 
@@ -7109,6 +7163,7 @@
         }
 
         function clearAllBookings() {
+            if (!checkAdminAccess()) return;
             if (confirm('Вы уверены, что хотите очистить ВСЕ бронирования и заказы?')) {
                 bookedSlots = [];
                 saveBookedSlots();
@@ -7122,6 +7177,7 @@
         }
 
         function addTestBookings() {
+            if (!checkAdminAccess()) return;
             const today = new Date();
             const tomorrow = new Date(today);
             tomorrow.setDate(today.getDate() + 1);
@@ -7187,6 +7243,7 @@
         }
 
         function exportSchedule() {
+            if (!checkAdminAccess()) return;
             const orders = JSON.parse(localStorage.getItem('masterOrders')) || [];
             console.log('Экспорт данных:', orders);
             showNotification('Данные экспортированы в консоль разработчика', 'info');
@@ -7194,6 +7251,7 @@
 
         // ========== НОВЫЕ ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ ГРАФИКОМ РАБОТЫ ==========
         function openScheduleSettings() {
+            if (!checkAdminAccess()) return;
             const modal = document.getElementById('scheduleSettingsModal');
             modal.classList.add('active');
             renderScheduleSettings();
@@ -7269,6 +7327,7 @@
         }
 
         function setDefaultSchedule() {
+            if (!checkAdminAccess()) return;
             workSchedule = {
                 monday: { enabled: true, start: "10:00", end: "20:00" },
                 tuesday: { enabled: true, start: "10:00", end: "20:00" },
@@ -7286,6 +7345,7 @@
         
         // Управление нерабочими днями
         function openDayOffManager() {
+            if (!checkAdminAccess()) return;
             const modalHTML = `
                 <div class="modal active" id="dayOffManagerModal">
                     <div class="modal-content editor-modal">
@@ -7418,6 +7478,7 @@
 
         // ========== УПРАВЛЕНИЕ УСЛУГАМИ ==========
         function openServiceEditor() {
+            if (!checkAdminAccess()) return;
             const modalHTML = `
                 <div class="modal active" id="serviceEditorModal">
                     <div class="modal-content editor-modal">
@@ -7485,6 +7546,7 @@
         }
 
         function addNewService() {
+            if (!checkAdminAccess()) return;
             currentEditingService = null;
             openServiceForm();
         }
@@ -7642,6 +7704,7 @@
 
         // ========== РЕДАКТОР ЦЕН ==========
         function openPriceEditor() {
+            if (!checkAdminAccess()) return;
             const modalHTML = `
                 <div class="modal active" id="priceEditorModal">
                     <div class="modal-content editor-modal">
@@ -7749,6 +7812,7 @@
 
         // ========== УПРАВЛЕНИЕ КОНТЕНТОМ ==========
         function changeMasterPhoto() {
+            if (!checkAdminAccess()) return;
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/*';
@@ -7784,6 +7848,7 @@
         }
 
         function manageServicePhotos() {
+            if (!checkAdminAccess()) return;
             const modalHTML = `
                 <div class="modal active" id="servicePhotosModal">
                     <div class="modal-content editor-modal">
@@ -7917,6 +7982,7 @@
 
         // ========== СТАТИСТИКА С НАСТРОЙКАМИ ==========
         function openStatsSettings() {
+            if (!checkAdminAccess()) return;
             const modalHTML = `
                 <div class="modal active" id="statsSettingsModal">
                     <div class="modal-content editor-modal">
@@ -7981,6 +8047,7 @@
         }
 
         function showCustomPeriodStats() {
+            if (!checkAdminAccess()) return;
             const startDate = prompt('Введите начальную дату (ДД.ММ.ГГГГ):');
             const endDate = prompt('Введите конечную дату (ДД.ММ.ГГГГ):');
             
@@ -8022,6 +8089,7 @@
         }
 
         function exportStats() {
+            if (!checkAdminAccess()) return;
             const orders = JSON.parse(localStorage.getItem('masterOrders')) || [];
             const stats = {
                 totalOrders: orders.length,
@@ -8397,6 +8465,29 @@
                         document.getElementById('loyaltyContent').style.display = 'block';
                         updateLoyaltyDisplay();
                     } else if (tabId === 'admin') {
+                        // Проверка авторизации перед показом админ-панели
+                        if (!isAuthorizedAdmin()) {
+                            showNotification('❌ Доступ запрещен. У вас нет прав для доступа к админ-панели.', 'error');
+                            // Переключаем обратно на вкладку "Мои записи"
+                            document.querySelectorAll('.profile-tab').forEach(t => {
+                                t.classList.remove('active');
+                            });
+                            const appointmentsTab = document.querySelector('.profile-tab[data-profile-tab="appointments"]');
+                            if (appointmentsTab) {
+                                appointmentsTab.classList.add('active');
+                                document.getElementById('appointmentsContent').style.display = 'block';
+                                updateClientAppointments();
+                            }
+                            return;
+                        }
+                        
+                        // Дополнительная проверка: если режим мастера выключен, включаем его
+                        if (!isMaster) {
+                            isMaster = true;
+                            localStorage.setItem('isMaster', 'true');
+                            updateUIForUserRole();
+                        }
+                        
                         document.getElementById('adminContent').style.display = 'block';
                         updateAdminSchedule();
                         updateAdminStats();
