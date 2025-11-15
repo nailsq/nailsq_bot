@@ -3111,22 +3111,27 @@
             } else {
                 // Показываем интерфейс клиента
                 const clientId = getClientId();
+                
+                // Всегда показываем чат клиенту (даже если заказы не одобрены)
+                // В чате будут видны все уведомления о заказах
+                document.getElementById('clientChatView').style.display = 'block';
+                document.getElementById('masterChatView').style.display = 'none';
+                
+                // Создаем чат если его нет (он мог быть создан при оформлении заказа)
+                if (!chats[clientId]) {
+                    createNewChat(clientId);
+                }
+                
+                currentChatId = clientId;
+                
+                // Проверяем есть ли одобренная запись для активации чата
                 const hasApprovedOrder = checkClientHasApprovedOrder(clientId);
                 
                 if (hasApprovedOrder) {
-                    // Если есть одобренная запись, показываем чат
-                    document.getElementById('clientChatView').style.display = 'block';
-                    document.getElementById('masterChatView').style.display = 'none';
-                    
-                    if (!chats[clientId]) {
-                        createNewChat(clientId);
-                    }
-                    currentChatId = clientId;
+                    // Если есть одобренная запись, активируем чат (можно писать)
                     renderChatMessages();
                 } else {
-                    // Если нет одобренной записи, показываем сообщение
-                    document.getElementById('clientChatView').style.display = 'block';
-                    document.getElementById('masterChatView').style.display = 'none';
+                    // Если нет одобренной записи, показываем сообщение ожидания
                     showChatWaitingMessage();
                 }
             }
@@ -3146,40 +3151,80 @@
             const container = document.getElementById('chatMessages');
             if (!container) return;
             
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px 20px; color: #888;">
-                    <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
-                    <h3 style="margin-bottom: 12px;">Чат будет доступен после одобрения записи</h3>
-                    <p style="font-size: 14px; line-height: 1.5;">
-                        После того как мастер подтвердит вашу запись, здесь появится возможность общаться с мастером.
-                    </p>
-                </div>
-            `;
+            const clientId = getClientId();
             
-            // Блокируем поле ввода
-            const messageInput = document.getElementById('messageInput');
-            const sendBtn = document.getElementById('sendMessageBtn');
-            const attachBtn = document.getElementById('attachPhotoBtn');
-            
-            if (messageInput) {
-                messageInput.disabled = true;
-                messageInput.placeholder = 'Чат будет доступен после одобрения записи';
+            // Если есть чат с сообщениями, показываем их (уведомления о заказах)
+            if (chats[clientId] && chats[clientId].messages && chats[clientId].messages.length > 0) {
+                // Показываем сообщения из чата
+                renderChatMessages();
+                
+                // Блокируем поле ввода если нет одобренной записи
+                const hasApprovedOrder = checkClientHasApprovedOrder(clientId);
+                const messageInput = document.getElementById('messageInput');
+                const sendBtn = document.getElementById('sendMessageBtn');
+                const attachBtn = document.getElementById('attachPhotoBtn');
+                
+                if (!hasApprovedOrder) {
+                    if (messageInput) {
+                        messageInput.disabled = true;
+                        messageInput.placeholder = 'Чат будет доступен после одобрения записи';
+                    }
+                    if (sendBtn) sendBtn.disabled = true;
+                    if (attachBtn) attachBtn.disabled = true;
+                } else {
+                    if (messageInput) {
+                        messageInput.disabled = false;
+                        messageInput.placeholder = 'Напишите сообщение...';
+                    }
+                    if (sendBtn) sendBtn.disabled = false;
+                    if (attachBtn) attachBtn.disabled = false;
+                }
+            } else {
+                // Если нет сообщений, показываем сообщение ожидания
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: #888;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+                        <h3 style="margin-bottom: 12px;">Чат будет доступен после одобрения записи</h3>
+                        <p style="font-size: 14px; line-height: 1.5;">
+                            После того как мастер подтвердит вашу запись, здесь появится возможность общаться с мастером.
+                        </p>
+                    </div>
+                `;
+                
+                // Блокируем поле ввода
+                const messageInput = document.getElementById('messageInput');
+                const sendBtn = document.getElementById('sendMessageBtn');
+                const attachBtn = document.getElementById('attachPhotoBtn');
+                
+                if (messageInput) {
+                    messageInput.disabled = true;
+                    messageInput.placeholder = 'Чат будет доступен после одобрения записи';
+                }
+                if (sendBtn) sendBtn.disabled = true;
+                if (attachBtn) attachBtn.disabled = true;
             }
-            if (sendBtn) sendBtn.disabled = true;
-            if (attachBtn) attachBtn.disabled = true;
         }
         
-        // Получение ID клиента
+        // Получение ID клиента (всегда один ID для одного клиента)
         function getClientId() {
+            // Приоритет 1: ID из Telegram (самый надежный)
             if (user && user.id) {
-                return `client_${user.id}`;
+                const telegramClientId = `client_${user.id}`;
+                // Сохраняем для использования в заказах
+                localStorage.setItem('clientId', telegramClientId);
+                return telegramClientId;
             }
-            // Если нет данных Telegram, используем случайный ID
+            
+            // Приоритет 2: Используем сохраненный ID из localStorage
             let clientId = localStorage.getItem('clientId');
-            if (!clientId) {
-                clientId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                localStorage.setItem('clientId', clientId);
+            if (clientId) {
+                return clientId;
             }
+            
+            // Приоритет 3: Если нет сохраненного ID, создаем постоянный ID
+            // Используем timestamp для уникальности, но сохраняем его
+            clientId = `client_${Date.now()}`;
+            localStorage.setItem('clientId', clientId);
             return clientId;
         }
         
@@ -4609,16 +4654,22 @@
                 try {
                     clientWishes = document.getElementById('clientWishes').value;
                     
-                    // Получаем правильный ID клиента
-                    const clientId = user?.id || (() => {
-                        const storedId = localStorage.getItem('clientId');
-                        if (storedId) {
-                            // Извлекаем числовой ID из строки 'client_123'
-                            const match = storedId.match(/client_(\d+)/);
-                            return match ? match[1] : storedId.replace('client_', '');
-                        }
-                        return null;
-                    })();
+                    // Получаем правильный ID клиента (используем getClientId для единообразия)
+                    const clientId = getClientId();
+                    // Извлекаем числовой ID из строки 'client_123' для сохранения в заказе
+                    let userIdForOrder = null;
+                    if (user && user.id) {
+                        userIdForOrder = user.id;
+                    } else if (clientId) {
+                        const match = clientId.match(/client_(\d+)/);
+                        userIdForOrder = match ? match[1] : clientId.replace('client_', '');
+                    }
+                    
+                    // Если нет ID, создаем временный, но сохраняем clientId в localStorage
+                    if (!userIdForOrder) {
+                        userIdForOrder = Date.now();
+                        localStorage.setItem('clientId', `client_${userIdForOrder}`);
+                    }
                     
                     const order = {
                         id: Date.now(),
@@ -4633,7 +4684,7 @@
                         client: {
                             name: user?.first_name || "Клиент",
                             username: user?.username ? `@${user.username}` : "@клиент",
-                            userId: clientId || 'user-' + Date.now()
+                            userId: userIdForOrder // Всегда сохраняем числовой ID
                         }
                     };
 
@@ -4683,32 +4734,36 @@
         function getClientOrders() {
             const orders = JSON.parse(localStorage.getItem('masterOrders')) || [];
             
-            // Получаем ID клиента
-            let clientId = user?.id;
-            if (!clientId) {
-                const storedId = localStorage.getItem('clientId');
-                if (storedId) {
-                    // Извлекаем числовой ID из строки 'client_123' или 'client_123_abc'
-                    const match = storedId.match(/client_(\d+)/);
-                    clientId = match ? match[1] : storedId.replace(/^client_/, '');
-                }
+            // Используем getClientId() для единообразия
+            const currentClientId = getClientId();
+            
+            // Извлекаем числовой ID из строки 'client_123'
+            let clientIdNumber = null;
+            if (user && user.id) {
+                clientIdNumber = user.id;
+            } else if (currentClientId) {
+                const match = currentClientId.match(/client_(\d+)/);
+                clientIdNumber = match ? match[1] : currentClientId.replace(/^client_/, '');
             }
             
-            if (!clientId) {
-                // Если нет ID, пытаемся найти по имени из Telegram
+            if (!clientIdNumber) {
+                // Если нет ID, пытаемся найти по имени из Telegram (fallback)
                 const clientName = user?.first_name || "Клиент";
                 return orders.filter(order => order.client.name === clientName);
             }
             
-            // Фильтруем заказы по userId
+            // Фильтруем заказы по userId (сравниваем числовые ID)
             return orders.filter(order => {
                 const orderUserId = order.client.userId;
+                if (!orderUserId) return false;
+                
                 // Пропускаем временные ID
                 if (typeof orderUserId === 'string' && orderUserId.startsWith('user-')) {
                     return false;
                 }
-                // Сравниваем ID
-                return String(orderUserId) === String(clientId);
+                
+                // Сравниваем числовые ID
+                return String(orderUserId) === String(clientIdNumber);
             });
         }
 
@@ -6799,13 +6854,45 @@
             saveChats();
         }
 
-        // Получение clientId из заказа
+        // Получение clientId из заказа (всегда один ID для одного клиента)
         function getClientIdFromOrder(order) {
-            if (order.client.userId && !String(order.client.userId).startsWith('user-')) {
-                return `client_${order.client.userId}`;
+            // Приоритет 1: userId из заказа (основной способ)
+            if (order.client.userId) {
+                const userId = String(order.client.userId);
+                // Если это не временный ID (не начинается с 'user-'), используем его
+                if (!userId.startsWith('user-')) {
+                    return `client_${userId}`;
+                }
+                // Если это временный ID, извлекаем числовой ID если есть
+                const match = userId.match(/user-(\d+)/);
+                if (match) {
+                    return `client_${match[1]}`;
+                }
             }
-            // Если нет нормального ID, создаем по имени (не идеально, но работает)
-            return `client_${order.client.name.replace(/\s+/g, '_')}_${order.id}`;
+            
+            // Приоритет 2: Если есть Telegram user, используем его ID
+            if (user && user.id) {
+                return `client_${user.id}`;
+            }
+            
+            // Приоритет 3: Используем сохраненный clientId из localStorage
+            const storedId = localStorage.getItem('clientId');
+            if (storedId) {
+                // Извлекаем числовой ID из строки 'client_123'
+                const match = storedId.match(/client_(\d+)/);
+                if (match) {
+                    return `client_${match[1]}`;
+                }
+                // Если формат другой, используем как есть
+                return storedId;
+            }
+            
+            // Приоритет 4: Если ничего не найдено, создаем по имени (но это должно быть редко)
+            // Используем только имя, без ID заказа, чтобы один клиент = один чат
+            const nameBasedId = `client_${order.client.name.replace(/\s+/g, '_').toLowerCase()}`;
+            // Сохраняем для будущего использования
+            localStorage.setItem('clientId', nameBasedId);
+            return nameBasedId;
         }
 
         function deleteOrder(orderId) {
